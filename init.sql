@@ -12,7 +12,11 @@ CREATE TABLE IF NOT EXISTS schemas (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   description TEXT,
+  schema_type VARCHAR(20) DEFAULT 'target' CHECK (schema_type IN ('source', 'target')),
+  format_type VARCHAR(50) DEFAULT 'json' CHECK (format_type IN ('json', 'csv', 'tsv', 'pipe', 'custom')),
   schema_definition JSONB NOT NULL,
+  raw_content TEXT,
+  delimiter VARCHAR(10),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -34,22 +38,22 @@ CREATE TABLE IF NOT EXISTS mappings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  schema_id UUID REFERENCES schemas(id) ON DELETE CASCADE,
-  file_id UUID REFERENCES uploaded_files(id) ON DELETE CASCADE,
+  source_schema_id UUID REFERENCES schemas(id) ON DELETE CASCADE,
+  target_schema_id UUID REFERENCES schemas(id) ON DELETE CASCADE,
   field_mappings JSONB NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_mappings_schema_id ON mappings(schema_id);
-CREATE INDEX IF NOT EXISTS idx_mappings_file_id ON mappings(file_id);
+CREATE INDEX IF NOT EXISTS idx_mappings_source_schema_id ON mappings(source_schema_id);
+CREATE INDEX IF NOT EXISTS idx_mappings_target_schema_id ON mappings(target_schema_id);
 CREATE INDEX IF NOT EXISTS idx_schemas_name ON schemas(name);
 CREATE INDEX IF NOT EXISTS idx_mappings_name ON mappings(name);
 
 -- Insert sample schema for testing
-INSERT INTO schemas (name, description, schema_definition) VALUES
-('Customer Schema', 'Standard customer data schema', '{
+INSERT INTO schemas (name, description, schema_type, schema_definition) VALUES
+('Customer Schema', 'Standard customer data schema', 'target', '{
   "fields": [
     {"name": "firstName", "type": "string", "required": true},
     {"name": "lastName", "type": "string", "required": true},
