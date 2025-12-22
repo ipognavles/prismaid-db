@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS schemas (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   description TEXT,
+  vendor VARCHAR(255),
   schema_type VARCHAR(20) DEFAULT 'target' CHECK (schema_type IN ('source', 'target')),
   format_type VARCHAR(50) DEFAULT 'json' CHECK (format_type IN ('json', 'csv', 'tsv', 'pipe', 'custom')),
   schema_definition JSONB NOT NULL,
