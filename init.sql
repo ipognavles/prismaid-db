@@ -14,10 +14,11 @@ CREATE TABLE IF NOT EXISTS schemas (
   description TEXT,
   vendor VARCHAR(255),
   schema_type VARCHAR(20) DEFAULT 'target' CHECK (schema_type IN ('source', 'target')),
-  format_type VARCHAR(50) DEFAULT 'json' CHECK (format_type IN ('json', 'csv', 'tsv', 'pipe', 'custom')),
+  format_type VARCHAR(50) DEFAULT 'json' CHECK (format_type IN ('json', 'csv', 'tsv', 'pipe', 'edi', 'custom')),
   schema_definition JSONB NOT NULL,
   raw_content TEXT,
   delimiter VARCHAR(10),
+  edi_transaction VARCHAR(50),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
