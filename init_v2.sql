@@ -102,6 +102,19 @@ VALUES
     (3, 'edi', 'edi', 'edi'),
     (3, 'custom', 'custom', 'custom');
 
+-- Schema Format Reference Data
+INSERT INTO pmd_reference_category (pmd_reference_category_id, reference_category, reference_description) 
+VALUES (4, 'connection_type', 'Connection Type');
+
+INSERT INTO pmd_reference_value (pmd_reference_category_id, reference_value_code, reference_value_name, reference_value_desc) 
+VALUES 
+    (4, 'SQL_DB', 'SQL Database', 'SQL Database'),
+    (4, 'NOSQL_DB', 'NoSQL Database', 'NoSQL Database'),
+    (4, 'API', 'API', 'API'),
+    (4, 'SFTP_FTPS', 'SFTP / FTPS', 'SFTP / FTPS'),
+    (4, 'FILE_STORAGE', 'File Storage', 'File Storage'),
+    (4, 'MSG_QUEUE', 'Message Queue', 'Message Queue'),
+    (4, 'EVENT_STREAM', 'Event Stream', 'Event Stream');
 
 -- ============================================================================
 -- VENDOR REGISTRY
@@ -242,3 +255,35 @@ CREATE TABLE IF NOT EXISTS pmd_field_mappings (
         REFERENCES pmd_schemas_registry(pmd_schemas_registry_id)
 );
 
+
+-- ============================================================================
+-- CONNECTIONS REGISTRY
+-- ============================================================================
+
+-- DROP SEQUENCE pmd_connections_registry_seq;
+CREATE SEQUENCE pmd_connections_registry_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_connections_registry (
+    pmd_connections_registry_id BIGINT DEFAULT nextval('pmd_connections_registry_seq'::regclass) NOT NULL,
+    connection_name VARCHAR(255) NOT NULL,
+    connection_desc TEXT,
+    pmd_reference_value_id BIGINT NOT NULL,
+    connection_subtype VARCHAR(100) NOT NULL,
+    connection_config JSONB NOT NULL,
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP DEFAULT now() NOT NULL,
+    CONSTRAINT pmd_connections_registry_pk PRIMARY KEY (pmd_connections_registry_id),
+    CONSTRAINT pmd_connections_type_fk FOREIGN KEY (pmd_reference_value_id) 
+        REFERENCES pmd_reference_value(pmd_reference_value_id)
+);
