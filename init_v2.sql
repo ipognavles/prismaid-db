@@ -29,10 +29,10 @@ CREATE TABLE pmd_reference_category (
     is_active BOOLEAN DEFAULT true NOT NULL,
     created_by BIGINT DEFAULT 1 NOT NULL,
     created_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    created_at TIMESTAMP DEFAULT now() NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     updated_by BIGINT DEFAULT 1 NOT NULL,
     updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    updated_at TIMESTAMP DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     CONSTRAINT pmd_reference_category_pk PRIMARY KEY (pmd_reference_category_id)
 );
 
@@ -54,10 +54,10 @@ CREATE TABLE pmd_reference_value (
     is_active BOOLEAN DEFAULT true NOT NULL,
     created_by BIGINT DEFAULT 1 NOT NULL,
     created_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    created_at TIMESTAMP DEFAULT now() NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     updated_by BIGINT DEFAULT 1 NOT NULL,
     updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    updated_at TIMESTAMP DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     CONSTRAINT pmd_reference_value_pk PRIMARY KEY (pmd_reference_value_id),
     CONSTRAINT pmd_reference_category_fk FOREIGN KEY (pmd_reference_category_id) 
         REFERENCES pmd_reference_category(pmd_reference_category_id)
@@ -136,10 +136,10 @@ CREATE TABLE IF NOT EXISTS pmd_vendor_registry (
     is_active BOOLEAN DEFAULT true NOT NULL,
     created_by BIGINT DEFAULT 1 NOT NULL,
     created_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    created_at TIMESTAMP DEFAULT now() NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     updated_by BIGINT DEFAULT 1 NOT NULL,
     updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    updated_at TIMESTAMP DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     CONSTRAINT pmd_vendor_registry_pk PRIMARY KEY (pmd_vendor_registry_id)
 );
 
@@ -173,10 +173,10 @@ CREATE TABLE IF NOT EXISTS pmd_schemas_registry (
     is_active BOOLEAN DEFAULT true NOT NULL,
     created_by BIGINT DEFAULT 1 NOT NULL,
     created_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    created_at TIMESTAMP DEFAULT now() NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     updated_by BIGINT DEFAULT 1 NOT NULL,
     updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    updated_at TIMESTAMP DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     CONSTRAINT pmd_schemas_registry_pk PRIMARY KEY (pmd_schemas_registry_id),
     CONSTRAINT pmd_schemas_vendor_fk FOREIGN KEY (pmd_vendor_registry_id) 
         REFERENCES pmd_vendor_registry(pmd_vendor_registry_id),
@@ -213,10 +213,10 @@ CREATE TABLE IF NOT EXISTS pmd_file_uploads (
     is_active BOOLEAN DEFAULT true NOT NULL,
     created_by BIGINT DEFAULT 1 NOT NULL,
     created_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    created_at TIMESTAMP DEFAULT now() NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     updated_by BIGINT DEFAULT 1 NOT NULL,
     updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    updated_at TIMESTAMP DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     CONSTRAINT pmd_file_uploads_pk PRIMARY KEY (pmd_file_uploads_id)
 );
 
@@ -244,10 +244,10 @@ CREATE TABLE IF NOT EXISTS pmd_field_mappings (
     is_active BOOLEAN DEFAULT true NOT NULL,
     created_by BIGINT DEFAULT 1 NOT NULL,
     created_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    created_at TIMESTAMP DEFAULT now() NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     updated_by BIGINT DEFAULT 1 NOT NULL,
     updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    updated_at TIMESTAMP DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     CONSTRAINT pmd_field_mappings_pk PRIMARY KEY (pmd_field_mappings_id),
     CONSTRAINT pmd_mappings_source_fk FOREIGN KEY (source_schema_id) 
         REFERENCES pmd_schemas_registry(pmd_schemas_registry_id),
@@ -276,13 +276,14 @@ CREATE TABLE IF NOT EXISTS pmd_connections_registry (
     pmd_reference_value_id BIGINT NOT NULL,
     connection_subtype VARCHAR(100) NOT NULL,
     connection_config JSONB NOT NULL,
+    last_validated_at TIMESTAMP WITH TIME ZONE,
     is_active BOOLEAN DEFAULT true NOT NULL,
     created_by BIGINT DEFAULT 1 NOT NULL,
     created_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    created_at TIMESTAMP DEFAULT now() NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     updated_by BIGINT DEFAULT 1 NOT NULL,
     updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    updated_at TIMESTAMP DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     CONSTRAINT pmd_connections_registry_pk PRIMARY KEY (pmd_connections_registry_id),
     CONSTRAINT pmd_connections_type_fk FOREIGN KEY (pmd_reference_value_id) 
         REFERENCES pmd_reference_value(pmd_reference_value_id)
