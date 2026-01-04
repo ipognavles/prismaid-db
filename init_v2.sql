@@ -115,7 +115,8 @@ VALUES
     (4, 'SFTP_FTPS', 'SFTP / FTPS', 'SFTP / FTPS'),
     (4, 'FILE_STORAGE', 'File Storage', 'File Storage'),
     (4, 'MSG_QUEUE', 'Message Queue', 'Message Queue'),
-    (4, 'EVENT_STREAM', 'Event Stream', 'Event Stream');
+    (4, 'EVENT_STREAM', 'Event Stream', 'Event Stream'),
+    (4, 'AI_SERVICES', 'AI Services', 'AI Services');
 
 -- ============================================================================
 -- VENDOR REGISTRY
