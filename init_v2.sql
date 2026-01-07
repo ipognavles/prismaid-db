@@ -101,6 +101,7 @@ VALUES
     (3, 'pipe', 'pipe', 'pipe'),
     (3, 'edi', 'edi', 'edi'),
     (3, 'xlsx', 'xlsx', 'xlsx'),
+    (3, 'sql', 'sql', 'sql'),
     (3, 'custom', 'custom', 'custom');
 
 -- Schema Format Reference Data
