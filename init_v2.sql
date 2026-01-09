@@ -191,39 +191,6 @@ CREATE TABLE IF NOT EXISTS pmd_schemas_registry (
         REFERENCES pmd_reference_value(pmd_reference_value_id)
 );
 
-
--- ============================================================================
--- FILE UPLOADS
--- ============================================================================
-
--- DROP SEQUENCE pmd_file_uploads_seq;
-CREATE SEQUENCE pmd_file_uploads_seq
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 9223372036854775807
-    START 1
-    CACHE 1
-    NO CYCLE;
-
-CREATE TABLE IF NOT EXISTS pmd_file_uploads (
-    pmd_file_uploads_id BIGINT DEFAULT nextval('pmd_file_uploads_seq'::regclass) NOT NULL,
-    filename VARCHAR(255) NOT NULL,
-    original_name VARCHAR(255) NOT NULL,
-    file_type VARCHAR(50),
-    file_path VARCHAR(500),
-    detected_fields JSONB,
-    sample_data JSONB,
-    is_active BOOLEAN DEFAULT true NOT NULL,
-    created_by BIGINT DEFAULT 1 NOT NULL,
-    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
-    updated_by BIGINT DEFAULT 1 NOT NULL,
-    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
-    CONSTRAINT pmd_file_uploads_pk PRIMARY KEY (pmd_file_uploads_id)
-);
-
-
 -- ============================================================================
 -- FIELD MAPPINGS
 -- ============================================================================
@@ -319,6 +286,39 @@ CREATE TABLE IF NOT EXISTS pmd_data_flows (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     CONSTRAINT pmd_data_flows_pk PRIMARY KEY (pmd_data_flow_id)
 );
+
+
+-- ============================================================================
+-- DATA FLOW RUNS TABLE
+-- ============================================================================
+
+CREATE SEQUENCE pmd_data_flow_runs_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_data_flow_runs (
+    pmd_data_flow_run_id BIGINT DEFAULT nextval('pmd_data_flow_runs_seq'::regclass) NOT NULL,
+    pmd_data_flow_id BIGINT NOT NULL,
+    run_status VARCHAR(50) NOT NULL,
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    execution_logs TEXT,
+    error_message TEXT,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT pmd_data_flow_runs_pk PRIMARY KEY (pmd_data_flow_run_id),
+    CONSTRAINT pmd_data_flow_runs_flow_fk FOREIGN KEY (pmd_data_flow_id) 
+        REFERENCES pmd_data_flows(pmd_data_flow_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_pmd_data_flow_runs_flow ON pmd_data_flow_runs(pmd_data_flow_id);
+CREATE INDEX IF NOT EXISTS idx_pmd_data_flow_runs_status ON pmd_data_flow_runs(run_status);
+CREATE INDEX IF NOT EXISTS idx_pmd_data_flow_runs_started ON pmd_data_flow_runs(started_at);
 
 
 -- ============================================================================
