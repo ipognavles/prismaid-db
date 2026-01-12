@@ -1403,3 +1403,1143 @@ ADD COLUMN IF NOT EXISTS pmd_app_id INT REFERENCES pmd_apps(pmd_app_id) ON DELET
 CREATE INDEX IF NOT EXISTS idx_api_definitions_app_id ON pmd_api_definitions(pmd_app_id);
 
 COMMENT ON TABLE pmd_api_definition_tags IS 'API Builder - Tags junction table for categorization';
+
+
+-- ============================================================================
+-- HL7 v2.x MESSAGING TABLES
+-- ============================================================================
+-- Version: 1.0
+-- Date: January 12, 2026
+-- Description: Tables for storing parsed HL7 v2.x messages (ADT, ORM, ORU, DFT)
+-- ============================================================================
+
+-- HL7 Messages Registry (file/message metadata)
+CREATE SEQUENCE pmd_hl7_messages_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_hl7_messages (
+    pmd_hl7_message_id BIGINT DEFAULT nextval('pmd_hl7_messages_seq'::regclass) NOT NULL,
+
+    -- File info
+    file_name VARCHAR(255) NOT NULL,
+    file_path TEXT NOT NULL,
+    file_size BIGINT,
+    file_hash VARCHAR(64),
+
+    -- MSH Header Data
+    message_type VARCHAR(10) NOT NULL,        -- ADT, ORM, ORU, DFT
+    trigger_event VARCHAR(10),                -- A01, A02, O01, R01, P03, etc.
+    message_control_id VARCHAR(199),          -- MSH-10
+    hl7_version VARCHAR(20),                  -- 2.3, 2.5.1, 2.7, etc.
+    sending_application VARCHAR(227),         -- MSH-3
+    sending_facility VARCHAR(227),            -- MSH-4
+    receiving_application VARCHAR(227),       -- MSH-5
+    receiving_facility VARCHAR(227),          -- MSH-6
+    message_datetime TIMESTAMP WITH TIME ZONE, -- MSH-7
+    processing_id VARCHAR(10),                -- MSH-11 (P=Production, T=Training, D=Debug)
+
+    -- Parsing status
+    parsed_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    parse_status VARCHAR(20) DEFAULT 'success',
+    parse_errors JSONB,
+    parse_warnings JSONB,
+    total_segments INTEGER DEFAULT 0,
+
+    -- Full message for reference
+    raw_message TEXT,
+    message_json JSONB NOT NULL,
+
+    -- Audit columns
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_hl7_messages_pk PRIMARY KEY (pmd_hl7_message_id)
+);
+
+CREATE INDEX idx_hl7_messages_type ON pmd_hl7_messages(message_type, trigger_event);
+CREATE INDEX idx_hl7_messages_control_id ON pmd_hl7_messages(message_control_id);
+CREATE INDEX idx_hl7_messages_datetime ON pmd_hl7_messages(message_datetime DESC);
+CREATE INDEX idx_hl7_messages_sending_facility ON pmd_hl7_messages(sending_facility);
+
+COMMENT ON TABLE pmd_hl7_messages IS 'HL7 v2.x message registry - stores parsed message metadata';
+
+
+-- HL7 Patient Events (from ADT messages)
+CREATE SEQUENCE pmd_hl7_patient_events_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_hl7_patient_events (
+    pmd_hl7_patient_event_id BIGINT DEFAULT nextval('pmd_hl7_patient_events_seq'::regclass) NOT NULL,
+    hl7_message_id BIGINT NOT NULL,
+
+    -- Event Info
+    event_type VARCHAR(10) NOT NULL,          -- A01, A02, A03, A04, A08, etc.
+    event_description VARCHAR(100),
+    event_datetime TIMESTAMP WITH TIME ZONE,
+    event_reason_code VARCHAR(50),
+
+    -- Patient (PID)
+    patient_id VARCHAR(250),                  -- PID-3
+    patient_account_number VARCHAR(250),      -- PID-18
+    patient_last_name VARCHAR(194),           -- PID-5.1
+    patient_first_name VARCHAR(194),          -- PID-5.2
+    patient_middle_name VARCHAR(194),         -- PID-5.3
+    patient_dob DATE,                         -- PID-7
+    patient_gender VARCHAR(1),                -- PID-8
+    patient_ssn VARCHAR(11),                  -- PID-19
+    patient_race VARCHAR(50),                 -- PID-10
+    patient_marital_status VARCHAR(10),       -- PID-16
+    patient_address JSONB,                    -- PID-11 full address
+    patient_phone_home VARCHAR(50),           -- PID-13
+    patient_phone_business VARCHAR(50),       -- PID-14
+
+    -- Visit (PV1)
+    visit_number VARCHAR(250),                -- PV1-19
+    patient_class VARCHAR(1),                 -- PV1-2 (I=Inpatient, O=Outpatient, E=Emergency)
+    patient_class_description VARCHAR(50),
+    admit_datetime TIMESTAMP WITH TIME ZONE,  -- PV1-44
+    discharge_datetime TIMESTAMP WITH TIME ZONE, -- PV1-45
+    hospital_service VARCHAR(50),             -- PV1-10
+    admission_type VARCHAR(50),               -- PV1-4
+
+    -- Location (PV1-3)
+    location_facility VARCHAR(100),
+    location_point_of_care VARCHAR(50),
+    location_room VARCHAR(50),
+    location_bed VARCHAR(50),
+
+    -- Providers
+    attending_physician_id VARCHAR(250),      -- PV1-7
+    attending_physician_name VARCHAR(255),
+    attending_physician_npi VARCHAR(10),
+    referring_physician_id VARCHAR(250),      -- PV1-8
+    referring_physician_name VARCHAR(255),
+    referring_physician_npi VARCHAR(10),
+
+    -- Primary Diagnosis
+    primary_diagnosis_code VARCHAR(50),
+    primary_diagnosis_description VARCHAR(255),
+    primary_diagnosis_type VARCHAR(10),
+
+    -- Primary Insurance
+    insurance_company_name VARCHAR(255),
+    insurance_group_number VARCHAR(50),
+    insurance_member_id VARCHAR(80),
+
+    -- Counts
+    diagnosis_count INTEGER DEFAULT 0,
+    insurance_count INTEGER DEFAULT 0,
+    allergy_count INTEGER DEFAULT 0,
+
+    -- Full event as JSONB (preserves all segments)
+    event_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_hl7_patient_events_pk PRIMARY KEY (pmd_hl7_patient_event_id),
+    CONSTRAINT pmd_hl7_patient_events_message_fk FOREIGN KEY (hl7_message_id)
+        REFERENCES pmd_hl7_messages(pmd_hl7_message_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_hl7_patient_events_message_id ON pmd_hl7_patient_events(hl7_message_id);
+CREATE INDEX idx_hl7_patient_events_patient_id ON pmd_hl7_patient_events(patient_id);
+CREATE INDEX idx_hl7_patient_events_visit_number ON pmd_hl7_patient_events(visit_number);
+CREATE INDEX idx_hl7_patient_events_event_type ON pmd_hl7_patient_events(event_type);
+CREATE INDEX idx_hl7_patient_events_event_datetime ON pmd_hl7_patient_events(event_datetime DESC);
+CREATE INDEX idx_hl7_patient_events_patient_name ON pmd_hl7_patient_events(patient_last_name, patient_first_name);
+
+COMMENT ON TABLE pmd_hl7_patient_events IS 'HL7 ADT patient events - admits, discharges, transfers';
+
+
+-- HL7 Orders (from ORM messages)
+CREATE SEQUENCE pmd_hl7_orders_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_hl7_orders (
+    pmd_hl7_order_id BIGINT DEFAULT nextval('pmd_hl7_orders_seq'::regclass) NOT NULL,
+    hl7_message_id BIGINT NOT NULL,
+
+    -- Order Common (ORC)
+    order_control VARCHAR(2),                 -- ORC-1 (NW=New, CA=Cancel, SC=Status Changed, etc.)
+    order_control_description VARCHAR(100),
+    placer_order_number VARCHAR(427),         -- ORC-2
+    filler_order_number VARCHAR(427),         -- ORC-3
+    order_status VARCHAR(10),                 -- ORC-5
+    order_status_description VARCHAR(100),
+    order_datetime TIMESTAMP WITH TIME ZONE,  -- ORC-9
+
+    -- Ordering Provider
+    ordering_provider_id VARCHAR(250),        -- ORC-12
+    ordering_provider_name VARCHAR(255),
+    ordering_provider_npi VARCHAR(10),
+
+    -- Order Detail (OBR)
+    universal_service_id VARCHAR(705),        -- OBR-4
+    universal_service_text VARCHAR(255),
+    universal_service_coding_system VARCHAR(50),
+    priority VARCHAR(10),                     -- OBR-5
+    requested_datetime TIMESTAMP WITH TIME ZONE, -- OBR-6
+    observation_datetime TIMESTAMP WITH TIME ZONE, -- OBR-7
+    specimen_source VARCHAR(300),             -- OBR-15
+    clinical_info TEXT,                       -- OBR-13
+
+    -- Patient link
+    patient_id VARCHAR(250),
+    patient_last_name VARCHAR(194),
+    patient_first_name VARCHAR(194),
+    patient_dob DATE,
+    patient_gender VARCHAR(1),
+    visit_number VARCHAR(250),
+
+    -- Primary Diagnosis
+    primary_diagnosis_code VARCHAR(50),
+    primary_diagnosis_description VARCHAR(255),
+
+    -- Observation/Result counts
+    observation_count INTEGER DEFAULT 0,
+    diagnosis_count INTEGER DEFAULT 0,
+
+    -- Full order as JSONB
+    order_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_hl7_orders_pk PRIMARY KEY (pmd_hl7_order_id),
+    CONSTRAINT pmd_hl7_orders_message_fk FOREIGN KEY (hl7_message_id)
+        REFERENCES pmd_hl7_messages(pmd_hl7_message_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_hl7_orders_message_id ON pmd_hl7_orders(hl7_message_id);
+CREATE INDEX idx_hl7_orders_patient_id ON pmd_hl7_orders(patient_id);
+CREATE INDEX idx_hl7_orders_placer_order ON pmd_hl7_orders(placer_order_number);
+CREATE INDEX idx_hl7_orders_filler_order ON pmd_hl7_orders(filler_order_number);
+CREATE INDEX idx_hl7_orders_order_control ON pmd_hl7_orders(order_control);
+CREATE INDEX idx_hl7_orders_order_datetime ON pmd_hl7_orders(order_datetime DESC);
+
+COMMENT ON TABLE pmd_hl7_orders IS 'HL7 ORM orders - lab orders, radiology orders, etc.';
+
+
+-- HL7 Observations/Results (from ORU messages)
+CREATE SEQUENCE pmd_hl7_observations_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_hl7_observations (
+    pmd_hl7_observation_id BIGINT DEFAULT nextval('pmd_hl7_observations_seq'::regclass) NOT NULL,
+    hl7_message_id BIGINT NOT NULL,
+    hl7_order_id BIGINT,                      -- Optional link to ORM order
+
+    -- Order info (OBR)
+    placer_order_number VARCHAR(427),
+    filler_order_number VARCHAR(427),
+    universal_service_id VARCHAR(705),        -- Test/panel code
+    universal_service_text VARCHAR(255),
+    result_status VARCHAR(1),                 -- OBR-25 (F=Final, P=Preliminary, etc.)
+    result_status_description VARCHAR(100),
+    observation_datetime TIMESTAMP WITH TIME ZONE,
+
+    -- Specimen
+    specimen_id VARCHAR(80),
+    specimen_type VARCHAR(100),
+    specimen_source_site VARCHAR(100),
+    specimen_collection_datetime TIMESTAMP WITH TIME ZONE,
+
+    -- Observation result (OBX)
+    obx_set_id INTEGER,                       -- OBX-1
+    value_type VARCHAR(3),                    -- OBX-2 (NM, ST, CE, etc.)
+    observation_identifier VARCHAR(705),      -- OBX-3
+    observation_text VARCHAR(255),
+    observation_coding_system VARCHAR(50),
+    observation_value TEXT,                   -- OBX-5
+    observation_value_raw TEXT,
+    units VARCHAR(100),                       -- OBX-6
+    reference_range VARCHAR(60),              -- OBX-7
+    abnormal_flags VARCHAR(20),               -- OBX-8
+    abnormal_flags_description VARCHAR(100),
+    observation_result_status VARCHAR(1),     -- OBX-11
+    observation_result_status_description VARCHAR(100),
+    obx_observation_datetime TIMESTAMP WITH TIME ZONE, -- OBX-14
+
+    -- Patient link
+    patient_id VARCHAR(250),
+    patient_last_name VARCHAR(194),
+    patient_first_name VARCHAR(194),
+    patient_dob DATE,
+    patient_gender VARCHAR(1),
+    visit_number VARCHAR(250),
+
+    -- Ordering Provider
+    ordering_provider_id VARCHAR(250),
+    ordering_provider_npi VARCHAR(10),
+
+    -- Full observation as JSONB
+    observation_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_hl7_observations_pk PRIMARY KEY (pmd_hl7_observation_id),
+    CONSTRAINT pmd_hl7_observations_message_fk FOREIGN KEY (hl7_message_id)
+        REFERENCES pmd_hl7_messages(pmd_hl7_message_id) ON DELETE CASCADE,
+    CONSTRAINT pmd_hl7_observations_order_fk FOREIGN KEY (hl7_order_id)
+        REFERENCES pmd_hl7_orders(pmd_hl7_order_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_hl7_observations_message_id ON pmd_hl7_observations(hl7_message_id);
+CREATE INDEX idx_hl7_observations_order_id ON pmd_hl7_observations(hl7_order_id);
+CREATE INDEX idx_hl7_observations_patient_id ON pmd_hl7_observations(patient_id);
+CREATE INDEX idx_hl7_observations_filler_order ON pmd_hl7_observations(filler_order_number);
+CREATE INDEX idx_hl7_observations_observation_id ON pmd_hl7_observations(observation_identifier);
+CREATE INDEX idx_hl7_observations_datetime ON pmd_hl7_observations(observation_datetime DESC);
+CREATE INDEX idx_hl7_observations_abnormal ON pmd_hl7_observations(abnormal_flags) WHERE abnormal_flags IS NOT NULL AND abnormal_flags != 'N';
+
+COMMENT ON TABLE pmd_hl7_observations IS 'HL7 ORU observation results - lab results, vitals, etc.';
+
+
+-- HL7 Financial Transactions (from DFT messages)
+CREATE SEQUENCE pmd_hl7_financial_transactions_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_hl7_financial_transactions (
+    pmd_hl7_financial_id BIGINT DEFAULT nextval('pmd_hl7_financial_transactions_seq'::regclass) NOT NULL,
+    hl7_message_id BIGINT NOT NULL,
+
+    -- FT1 Data
+    transaction_id VARCHAR(12),               -- FT1-2
+    transaction_batch_id VARCHAR(10),         -- FT1-3
+    transaction_date TIMESTAMP WITH TIME ZONE, -- FT1-4
+    transaction_posting_date TIMESTAMP WITH TIME ZONE, -- FT1-5
+    transaction_type VARCHAR(8),              -- FT1-6 (CG=Charge, CD=Credit, PY=Payment, AJ=Adjustment)
+    transaction_type_description VARCHAR(50),
+
+    -- Transaction code/procedure
+    transaction_code VARCHAR(705),            -- FT1-7
+    transaction_code_text VARCHAR(255),
+    transaction_code_system VARCHAR(50),
+    transaction_description VARCHAR(255),     -- FT1-8
+
+    -- Amounts
+    transaction_quantity NUMERIC(10,2),       -- FT1-10
+    transaction_amount NUMERIC(12,2),         -- FT1-11 (extended amount)
+    transaction_amount_unit NUMERIC(12,2),    -- FT1-12
+    unit_cost NUMERIC(12,2),                  -- FT1-22
+    insurance_amount NUMERIC(12,2),           -- FT1-15
+
+    -- Department
+    department_code VARCHAR(705),             -- FT1-13
+    department_name VARCHAR(255),
+
+    -- Procedure from FT1
+    ft1_procedure_code VARCHAR(705),          -- FT1-25
+    ft1_procedure_code_text VARCHAR(255),
+    ft1_procedure_modifiers VARCHAR(100),     -- FT1-26 (comma-separated)
+
+    -- Diagnosis from FT1
+    ft1_diagnosis_code VARCHAR(705),          -- FT1-19
+    ft1_diagnosis_description VARCHAR(255),
+
+    -- Providers
+    performed_by_id VARCHAR(250),             -- FT1-20
+    performed_by_name VARCHAR(255),
+    performed_by_npi VARCHAR(10),
+    ordered_by_id VARCHAR(250),               -- FT1-21
+    ordered_by_name VARCHAR(255),
+    ordered_by_npi VARCHAR(10),
+
+    -- Associated procedure (PR1)
+    pr1_procedure_code VARCHAR(705),
+    pr1_procedure_code_text VARCHAR(255),
+    pr1_procedure_datetime TIMESTAMP WITH TIME ZONE,
+    pr1_surgeon_name VARCHAR(255),
+    pr1_surgeon_npi VARCHAR(10),
+
+    -- Patient link
+    patient_id VARCHAR(250),
+    patient_last_name VARCHAR(194),
+    patient_first_name VARCHAR(194),
+    patient_dob DATE,
+    patient_gender VARCHAR(1),
+    patient_account_number VARCHAR(250),
+    visit_number VARCHAR(250),
+    patient_class VARCHAR(1),
+
+    -- Primary diagnosis (DG1)
+    primary_diagnosis_code VARCHAR(50),
+    primary_diagnosis_description VARCHAR(255),
+    primary_diagnosis_type VARCHAR(10),
+
+    -- Primary insurance (IN1)
+    insurance_company_id VARCHAR(255),
+    insurance_company_name VARCHAR(255),
+    insurance_group_number VARCHAR(50),
+    insurance_policy_number VARCHAR(80),
+
+    -- Counts
+    procedure_count INTEGER DEFAULT 0,
+    diagnosis_count INTEGER DEFAULT 0,
+    insurance_count INTEGER DEFAULT 0,
+
+    -- Full transaction as JSONB
+    transaction_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_hl7_financial_transactions_pk PRIMARY KEY (pmd_hl7_financial_id),
+    CONSTRAINT pmd_hl7_financial_transactions_message_fk FOREIGN KEY (hl7_message_id)
+        REFERENCES pmd_hl7_messages(pmd_hl7_message_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_hl7_financial_message_id ON pmd_hl7_financial_transactions(hl7_message_id);
+CREATE INDEX idx_hl7_financial_patient_id ON pmd_hl7_financial_transactions(patient_id);
+CREATE INDEX idx_hl7_financial_transaction_id ON pmd_hl7_financial_transactions(transaction_id);
+CREATE INDEX idx_hl7_financial_transaction_date ON pmd_hl7_financial_transactions(transaction_date DESC);
+CREATE INDEX idx_hl7_financial_transaction_type ON pmd_hl7_financial_transactions(transaction_type);
+CREATE INDEX idx_hl7_financial_department ON pmd_hl7_financial_transactions(department_code);
+CREATE INDEX idx_hl7_financial_procedure ON pmd_hl7_financial_transactions(ft1_procedure_code);
+
+COMMENT ON TABLE pmd_hl7_financial_transactions IS 'HL7 DFT financial transactions - charges, payments, adjustments';
+
+
+-- ============================================================================
+-- FHIR R4 TABLES
+-- ============================================================================
+-- Version: 1.0
+-- Date: January 12, 2026
+-- Description: Tables for storing parsed FHIR R4 resources
+-- ============================================================================
+
+-- FHIR Imports Registry (file/API import metadata)
+CREATE SEQUENCE pmd_fhir_imports_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_fhir_imports (
+    pmd_fhir_import_id BIGINT DEFAULT nextval('pmd_fhir_imports_seq'::regclass) NOT NULL,
+
+    -- Source info
+    source_type VARCHAR(20) NOT NULL,         -- 'file', 'api'
+    file_name VARCHAR(255),
+    file_path TEXT,
+    file_size BIGINT,
+    file_hash VARCHAR(64),
+    fhir_server_url TEXT,                     -- For API imports
+    connection_id BIGINT,                     -- FK to pmd_connections_registry for API
+
+    -- Content info
+    format VARCHAR(10),                       -- 'json', 'xml'
+    bundle_type VARCHAR(50),                  -- 'searchset', 'collection', 'transaction', 'batch', etc.
+    fhir_version VARCHAR(20),                 -- 'R4', '4.0.1', etc.
+
+    -- Parsing results
+    parsed_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    parse_status VARCHAR(20) DEFAULT 'success',
+    parse_errors JSONB,
+    parse_warnings JSONB,
+    total_resources INTEGER DEFAULT 0,
+
+    -- Resource type breakdown
+    resource_counts JSONB,                    -- {"Patient": 10, "Observation": 50, ...}
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_fhir_imports_pk PRIMARY KEY (pmd_fhir_import_id)
+);
+
+CREATE INDEX idx_fhir_imports_source_type ON pmd_fhir_imports(source_type);
+CREATE INDEX idx_fhir_imports_parsed_at ON pmd_fhir_imports(parsed_at DESC);
+
+COMMENT ON TABLE pmd_fhir_imports IS 'FHIR R4 import registry - tracks file and API imports';
+
+
+-- FHIR Patients (US Core Patient)
+CREATE SEQUENCE pmd_fhir_patients_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_fhir_patients (
+    pmd_fhir_patient_id BIGINT DEFAULT nextval('pmd_fhir_patients_seq'::regclass) NOT NULL,
+    fhir_import_id BIGINT NOT NULL,
+
+    -- FHIR identifiers
+    fhir_id VARCHAR(64) NOT NULL,             -- Resource.id
+
+    -- US Core required fields
+    identifier_mrn VARCHAR(255),              -- MRN identifier
+    identifier_ssn VARCHAR(11),               -- SSN (should be masked in prod)
+
+    -- Name
+    family_name VARCHAR(255),
+    given_name VARCHAR(255),
+    middle_name VARCHAR(255),
+    name_prefix VARCHAR(50),
+    name_suffix VARCHAR(50),
+
+    -- Demographics
+    birth_date DATE,
+    gender VARCHAR(10),                       -- male, female, other, unknown
+    deceased_boolean BOOLEAN,
+    deceased_datetime TIMESTAMP WITH TIME ZONE,
+
+    -- US Core extensions
+    race JSONB,                               -- US Core Race extension
+    ethnicity JSONB,                          -- US Core Ethnicity extension
+    birth_sex VARCHAR(10),                    -- US Core Birth Sex
+
+    -- Contact
+    phone VARCHAR(50),
+    email VARCHAR(255),
+    address_line1 VARCHAR(255),
+    address_line2 VARCHAR(255),
+    address_city VARCHAR(100),
+    address_state VARCHAR(50),
+    address_postal_code VARCHAR(20),
+    address_country VARCHAR(50),
+    address_json JSONB,                       -- Full address array
+
+    -- Communication
+    preferred_language VARCHAR(50),
+
+    -- Managing organization
+    managing_organization_reference VARCHAR(255),
+    managing_organization_display VARCHAR(255),
+
+    -- General practitioner
+    general_practitioner_reference VARCHAR(255),
+    general_practitioner_display VARCHAR(255),
+
+    -- Full resource
+    resource_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_fhir_patients_pk PRIMARY KEY (pmd_fhir_patient_id),
+    CONSTRAINT pmd_fhir_patients_import_fk FOREIGN KEY (fhir_import_id)
+        REFERENCES pmd_fhir_imports(pmd_fhir_import_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_fhir_patients_import_id ON pmd_fhir_patients(fhir_import_id);
+CREATE INDEX idx_fhir_patients_fhir_id ON pmd_fhir_patients(fhir_id);
+CREATE INDEX idx_fhir_patients_mrn ON pmd_fhir_patients(identifier_mrn);
+CREATE INDEX idx_fhir_patients_name ON pmd_fhir_patients(family_name, given_name);
+CREATE INDEX idx_fhir_patients_birth_date ON pmd_fhir_patients(birth_date);
+
+COMMENT ON TABLE pmd_fhir_patients IS 'FHIR R4 Patient resources (US Core profile)';
+
+
+-- FHIR Encounters (US Core Encounter)
+CREATE SEQUENCE pmd_fhir_encounters_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_fhir_encounters (
+    pmd_fhir_encounter_id BIGINT DEFAULT nextval('pmd_fhir_encounters_seq'::regclass) NOT NULL,
+    fhir_import_id BIGINT NOT NULL,
+
+    fhir_id VARCHAR(64) NOT NULL,
+
+    -- Status
+    status VARCHAR(20),                       -- planned, arrived, triaged, in-progress, onleave, finished, cancelled
+    class_code VARCHAR(50),                   -- AMB, EMER, FLD, HH, IMP, ACUTE, NONAC, OBSENC, PRENC, SS, VR
+    class_display VARCHAR(100),
+
+    -- Type
+    type_code VARCHAR(50),
+    type_display VARCHAR(255),
+    type_json JSONB,
+
+    -- Service type
+    service_type_code VARCHAR(50),
+    service_type_display VARCHAR(255),
+
+    -- Priority
+    priority_code VARCHAR(50),
+    priority_display VARCHAR(100),
+
+    -- Patient
+    patient_reference VARCHAR(255),
+    patient_fhir_id VARCHAR(64),
+    patient_display VARCHAR(255),
+
+    -- Period
+    period_start TIMESTAMP WITH TIME ZONE,
+    period_end TIMESTAMP WITH TIME ZONE,
+
+    -- Length (duration in minutes)
+    length_value NUMERIC(10,2),
+    length_unit VARCHAR(20),
+
+    -- Reason
+    reason_code VARCHAR(50),
+    reason_display VARCHAR(255),
+    reason_json JSONB,
+
+    -- Hospitalization
+    admit_source_code VARCHAR(50),
+    admit_source_display VARCHAR(100),
+    discharge_disposition_code VARCHAR(50),
+    discharge_disposition_display VARCHAR(100),
+
+    -- Location
+    location_json JSONB,
+
+    -- Participant (providers)
+    participant_json JSONB,
+
+    -- Diagnosis
+    diagnosis_json JSONB,
+
+    -- Service provider organization
+    service_provider_reference VARCHAR(255),
+    service_provider_display VARCHAR(255),
+
+    -- Full resource
+    resource_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_fhir_encounters_pk PRIMARY KEY (pmd_fhir_encounter_id),
+    CONSTRAINT pmd_fhir_encounters_import_fk FOREIGN KEY (fhir_import_id)
+        REFERENCES pmd_fhir_imports(pmd_fhir_import_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_fhir_encounters_import_id ON pmd_fhir_encounters(fhir_import_id);
+CREATE INDEX idx_fhir_encounters_fhir_id ON pmd_fhir_encounters(fhir_id);
+CREATE INDEX idx_fhir_encounters_patient_id ON pmd_fhir_encounters(patient_fhir_id);
+CREATE INDEX idx_fhir_encounters_status ON pmd_fhir_encounters(status);
+CREATE INDEX idx_fhir_encounters_class ON pmd_fhir_encounters(class_code);
+CREATE INDEX idx_fhir_encounters_period ON pmd_fhir_encounters(period_start DESC);
+
+COMMENT ON TABLE pmd_fhir_encounters IS 'FHIR R4 Encounter resources (US Core profile)';
+
+
+-- FHIR Claims
+CREATE SEQUENCE pmd_fhir_claims_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_fhir_claims (
+    pmd_fhir_claim_id BIGINT DEFAULT nextval('pmd_fhir_claims_seq'::regclass) NOT NULL,
+    fhir_import_id BIGINT NOT NULL,
+
+    fhir_id VARCHAR(64) NOT NULL,
+
+    -- Claim header
+    status VARCHAR(20),                       -- active, cancelled, draft, entered-in-error
+    type_code VARCHAR(50),                    -- institutional, oral, pharmacy, professional, vision
+    type_display VARCHAR(100),
+    use VARCHAR(20),                          -- claim, preauthorization, predetermination
+
+    -- Patient reference
+    patient_reference VARCHAR(255),
+    patient_fhir_id VARCHAR(64),
+    patient_display VARCHAR(255),
+
+    -- Provider
+    provider_reference VARCHAR(255),
+    provider_npi VARCHAR(10),
+    provider_display VARCHAR(255),
+
+    -- Insurer
+    insurer_reference VARCHAR(255),
+    insurer_display VARCHAR(255),
+
+    -- Priority
+    priority_code VARCHAR(50),
+
+    -- Prescription
+    prescription_reference VARCHAR(255),
+
+    -- Facility
+    facility_reference VARCHAR(255),
+    facility_display VARCHAR(255),
+
+    -- Amounts
+    total_value NUMERIC(12,2),
+    total_currency VARCHAR(3),
+
+    -- Dates
+    created_date TIMESTAMP WITH TIME ZONE,
+    billable_period_start DATE,
+    billable_period_end DATE,
+
+    -- Diagnosis (array)
+    diagnosis_json JSONB,
+    diagnosis_count INTEGER DEFAULT 0,
+
+    -- Procedure (array)
+    procedure_json JSONB,
+    procedure_count INTEGER DEFAULT 0,
+
+    -- Insurance (array)
+    insurance_json JSONB,
+
+    -- Items (service lines)
+    item_count INTEGER DEFAULT 0,
+    items_json JSONB,
+
+    -- Supporting info
+    supporting_info_json JSONB,
+
+    -- Full resource
+    resource_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_fhir_claims_pk PRIMARY KEY (pmd_fhir_claim_id),
+    CONSTRAINT pmd_fhir_claims_import_fk FOREIGN KEY (fhir_import_id)
+        REFERENCES pmd_fhir_imports(pmd_fhir_import_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_fhir_claims_import_id ON pmd_fhir_claims(fhir_import_id);
+CREATE INDEX idx_fhir_claims_fhir_id ON pmd_fhir_claims(fhir_id);
+CREATE INDEX idx_fhir_claims_patient_id ON pmd_fhir_claims(patient_fhir_id);
+CREATE INDEX idx_fhir_claims_status ON pmd_fhir_claims(status);
+CREATE INDEX idx_fhir_claims_type ON pmd_fhir_claims(type_code);
+CREATE INDEX idx_fhir_claims_created ON pmd_fhir_claims(created_date DESC);
+
+COMMENT ON TABLE pmd_fhir_claims IS 'FHIR R4 Claim resources';
+
+
+-- FHIR Observations (US Core Vital Signs, Lab Results)
+CREATE SEQUENCE pmd_fhir_observations_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_fhir_observations (
+    pmd_fhir_observation_id BIGINT DEFAULT nextval('pmd_fhir_observations_seq'::regclass) NOT NULL,
+    fhir_import_id BIGINT NOT NULL,
+
+    fhir_id VARCHAR(64) NOT NULL,
+
+    -- Status
+    status VARCHAR(20),                       -- registered, preliminary, final, amended, corrected, cancelled, entered-in-error
+
+    -- Category (vital-signs, laboratory, etc.)
+    category_code VARCHAR(100),
+    category_display VARCHAR(255),
+    category_json JSONB,
+
+    -- Code (LOINC, etc.)
+    code_system VARCHAR(255),
+    code_code VARCHAR(50),
+    code_display VARCHAR(255),
+
+    -- Value (polymorphic)
+    value_quantity_value NUMERIC(18,6),
+    value_quantity_unit VARCHAR(50),
+    value_quantity_system VARCHAR(255),
+    value_quantity_code VARCHAR(50),
+    value_string TEXT,
+    value_boolean BOOLEAN,
+    value_integer INTEGER,
+    value_codeable_concept_code VARCHAR(50),
+    value_codeable_concept_display VARCHAR(255),
+    value_codeable_concept_json JSONB,
+
+    -- Data absent reason
+    data_absent_reason_code VARCHAR(50),
+    data_absent_reason_display VARCHAR(100),
+
+    -- Reference ranges
+    reference_range_low NUMERIC(18,6),
+    reference_range_high NUMERIC(18,6),
+    reference_range_text VARCHAR(255),
+    reference_range_json JSONB,
+
+    -- Interpretation
+    interpretation_code VARCHAR(50),          -- normal, abnormal, high, low, etc.
+    interpretation_display VARCHAR(100),
+    interpretation_json JSONB,
+
+    -- Patient/Encounter references
+    patient_reference VARCHAR(255),
+    patient_fhir_id VARCHAR(64),
+    encounter_reference VARCHAR(255),
+    encounter_fhir_id VARCHAR(64),
+
+    -- Performer
+    performer_reference VARCHAR(255),
+    performer_display VARCHAR(255),
+
+    -- Timing
+    effective_datetime TIMESTAMP WITH TIME ZONE,
+    effective_period_start TIMESTAMP WITH TIME ZONE,
+    effective_period_end TIMESTAMP WITH TIME ZONE,
+    issued_datetime TIMESTAMP WITH TIME ZONE,
+
+    -- Body site
+    body_site_code VARCHAR(50),
+    body_site_display VARCHAR(100),
+
+    -- Method
+    method_code VARCHAR(50),
+    method_display VARCHAR(100),
+
+    -- Specimen
+    specimen_reference VARCHAR(255),
+
+    -- Device
+    device_reference VARCHAR(255),
+
+    -- Has member/derived from (for panels)
+    has_member_json JSONB,
+    derived_from_json JSONB,
+
+    -- Component observations (for multi-component like BP)
+    component_json JSONB,
+    component_count INTEGER DEFAULT 0,
+
+    -- Full resource
+    resource_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_fhir_observations_pk PRIMARY KEY (pmd_fhir_observation_id),
+    CONSTRAINT pmd_fhir_observations_import_fk FOREIGN KEY (fhir_import_id)
+        REFERENCES pmd_fhir_imports(pmd_fhir_import_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_fhir_observations_import_id ON pmd_fhir_observations(fhir_import_id);
+CREATE INDEX idx_fhir_observations_fhir_id ON pmd_fhir_observations(fhir_id);
+CREATE INDEX idx_fhir_observations_patient_id ON pmd_fhir_observations(patient_fhir_id);
+CREATE INDEX idx_fhir_observations_encounter_id ON pmd_fhir_observations(encounter_fhir_id);
+CREATE INDEX idx_fhir_observations_code ON pmd_fhir_observations(code_code);
+CREATE INDEX idx_fhir_observations_category ON pmd_fhir_observations(category_code);
+CREATE INDEX idx_fhir_observations_effective ON pmd_fhir_observations(effective_datetime DESC);
+CREATE INDEX idx_fhir_observations_status ON pmd_fhir_observations(status);
+
+COMMENT ON TABLE pmd_fhir_observations IS 'FHIR R4 Observation resources (vital signs, lab results)';
+
+
+-- FHIR Conditions (US Core Condition)
+CREATE SEQUENCE pmd_fhir_conditions_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_fhir_conditions (
+    pmd_fhir_condition_id BIGINT DEFAULT nextval('pmd_fhir_conditions_seq'::regclass) NOT NULL,
+    fhir_import_id BIGINT NOT NULL,
+
+    fhir_id VARCHAR(64) NOT NULL,
+
+    -- Clinical status
+    clinical_status_code VARCHAR(20),         -- active, recurrence, relapse, inactive, remission, resolved
+    clinical_status_display VARCHAR(100),
+
+    -- Verification status
+    verification_status_code VARCHAR(20),     -- unconfirmed, provisional, differential, confirmed, refuted, entered-in-error
+    verification_status_display VARCHAR(100),
+
+    -- Category
+    category_code VARCHAR(100),               -- problem-list-item, encounter-diagnosis, health-concern
+    category_display VARCHAR(255),
+    category_json JSONB,
+
+    -- Severity
+    severity_code VARCHAR(50),
+    severity_display VARCHAR(100),
+
+    -- Code (ICD-10, SNOMED)
+    code_system VARCHAR(255),
+    code_code VARCHAR(50),
+    code_display VARCHAR(255),
+
+    -- Body site
+    body_site_code VARCHAR(50),
+    body_site_display VARCHAR(100),
+    body_site_json JSONB,
+
+    -- Patient/Encounter
+    patient_reference VARCHAR(255),
+    patient_fhir_id VARCHAR(64),
+    encounter_reference VARCHAR(255),
+    encounter_fhir_id VARCHAR(64),
+
+    -- Dates
+    onset_datetime TIMESTAMP WITH TIME ZONE,
+    onset_age_value NUMERIC(5,2),
+    onset_age_unit VARCHAR(20),
+    onset_string VARCHAR(255),
+    abatement_datetime TIMESTAMP WITH TIME ZONE,
+    abatement_age_value NUMERIC(5,2),
+    abatement_age_unit VARCHAR(20),
+    abatement_string VARCHAR(255),
+    recorded_date DATE,
+
+    -- Recorder/Asserter
+    recorder_reference VARCHAR(255),
+    recorder_display VARCHAR(255),
+    asserter_reference VARCHAR(255),
+    asserter_display VARCHAR(255),
+
+    -- Stage
+    stage_summary_code VARCHAR(50),
+    stage_summary_display VARCHAR(100),
+    stage_json JSONB,
+
+    -- Evidence
+    evidence_json JSONB,
+
+    -- Notes
+    note_json JSONB,
+
+    -- Full resource
+    resource_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_fhir_conditions_pk PRIMARY KEY (pmd_fhir_condition_id),
+    CONSTRAINT pmd_fhir_conditions_import_fk FOREIGN KEY (fhir_import_id)
+        REFERENCES pmd_fhir_imports(pmd_fhir_import_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_fhir_conditions_import_id ON pmd_fhir_conditions(fhir_import_id);
+CREATE INDEX idx_fhir_conditions_fhir_id ON pmd_fhir_conditions(fhir_id);
+CREATE INDEX idx_fhir_conditions_patient_id ON pmd_fhir_conditions(patient_fhir_id);
+CREATE INDEX idx_fhir_conditions_encounter_id ON pmd_fhir_conditions(encounter_fhir_id);
+CREATE INDEX idx_fhir_conditions_code ON pmd_fhir_conditions(code_code);
+CREATE INDEX idx_fhir_conditions_category ON pmd_fhir_conditions(category_code);
+CREATE INDEX idx_fhir_conditions_clinical_status ON pmd_fhir_conditions(clinical_status_code);
+
+COMMENT ON TABLE pmd_fhir_conditions IS 'FHIR R4 Condition resources (diagnoses, problems)';
+
+
+-- FHIR Coverage (Insurance)
+CREATE SEQUENCE pmd_fhir_coverages_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_fhir_coverages (
+    pmd_fhir_coverage_id BIGINT DEFAULT nextval('pmd_fhir_coverages_seq'::regclass) NOT NULL,
+    fhir_import_id BIGINT NOT NULL,
+
+    fhir_id VARCHAR(64) NOT NULL,
+
+    -- Status
+    status VARCHAR(20),                       -- active, cancelled, draft, entered-in-error
+
+    -- Type
+    type_code VARCHAR(50),
+    type_display VARCHAR(100),
+
+    -- Policy holder
+    policy_holder_reference VARCHAR(255),
+    policy_holder_display VARCHAR(255),
+
+    -- Subscriber
+    subscriber_reference VARCHAR(255),
+    subscriber_display VARCHAR(255),
+    subscriber_id VARCHAR(255),
+
+    -- Beneficiary (patient)
+    beneficiary_reference VARCHAR(255),
+    beneficiary_fhir_id VARCHAR(64),
+    beneficiary_display VARCHAR(255),
+
+    -- Dependent
+    dependent VARCHAR(50),
+
+    -- Relationship
+    relationship_code VARCHAR(50),
+    relationship_display VARCHAR(100),
+
+    -- Period
+    period_start DATE,
+    period_end DATE,
+
+    -- Payor (insurance company)
+    payor_reference VARCHAR(255),
+    payor_display VARCHAR(255),
+    payor_json JSONB,
+
+    -- Class (plan details)
+    class_type_code VARCHAR(50),
+    class_type_display VARCHAR(100),
+    class_value VARCHAR(255),
+    class_name VARCHAR(255),
+    class_json JSONB,
+
+    -- Order
+    coverage_order INTEGER,
+
+    -- Network
+    network VARCHAR(255),
+
+    -- Cost to beneficiary
+    cost_to_beneficiary_json JSONB,
+
+    -- Subrogation
+    subrogation BOOLEAN,
+
+    -- Contract
+    contract_json JSONB,
+
+    -- Full resource
+    resource_json JSONB NOT NULL,
+
+    -- Audit
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_by BIGINT DEFAULT 1 NOT NULL,
+    updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+
+    CONSTRAINT pmd_fhir_coverages_pk PRIMARY KEY (pmd_fhir_coverage_id),
+    CONSTRAINT pmd_fhir_coverages_import_fk FOREIGN KEY (fhir_import_id)
+        REFERENCES pmd_fhir_imports(pmd_fhir_import_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_fhir_coverages_import_id ON pmd_fhir_coverages(fhir_import_id);
+CREATE INDEX idx_fhir_coverages_fhir_id ON pmd_fhir_coverages(fhir_id);
+CREATE INDEX idx_fhir_coverages_beneficiary_id ON pmd_fhir_coverages(beneficiary_fhir_id);
+CREATE INDEX idx_fhir_coverages_subscriber_id ON pmd_fhir_coverages(subscriber_id);
+CREATE INDEX idx_fhir_coverages_status ON pmd_fhir_coverages(status);
+CREATE INDEX idx_fhir_coverages_period ON pmd_fhir_coverages(period_start, period_end);
+
+COMMENT ON TABLE pmd_fhir_coverages IS 'FHIR R4 Coverage resources (insurance coverage)';
+
+
+-- Add FHIR_SERVER as a connection type
+INSERT INTO pmd_reference_value (pmd_reference_category_id, reference_value_code, reference_value_name, reference_value_desc)
+SELECT 4, 'FHIR_SERVER', 'FHIR Server', 'FHIR R4 Server Connection (REST API)'
+WHERE EXISTS (SELECT 1 FROM pmd_reference_category WHERE pmd_reference_category_id = 4)
+ON CONFLICT DO NOTHING;
+
+-- Add HL7 and FHIR to schema format reference values
+INSERT INTO pmd_reference_value (pmd_reference_category_id, reference_value_code, reference_value_name, reference_value_desc)
+SELECT 3, 'hl7', 'hl7', 'HL7 v2.x message format'
+WHERE EXISTS (SELECT 1 FROM pmd_reference_category WHERE pmd_reference_category_id = 3)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO pmd_reference_value (pmd_reference_category_id, reference_value_code, reference_value_name, reference_value_desc)
+SELECT 3, 'fhir', 'fhir', 'FHIR R4 resource format'
+WHERE EXISTS (SELECT 1 FROM pmd_reference_category WHERE pmd_reference_category_id = 3)
+ON CONFLICT DO NOTHING;
