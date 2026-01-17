@@ -34,17 +34,27 @@ CREATE TABLE pmd_users (
     updated_by BIGINT DEFAULT 1 NOT NULL,
     updated_by_name VARCHAR DEFAULT 'system' NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    preferences JSONB DEFAULT '{
+      "default_menu_state": "expanded",
+      "theme": "default",
+      "font_size": "medium",
+      "high_contrast": false,
+      "default_home_page": "/",
+      "language": "en"
+    }'::jsonb,
     CONSTRAINT pmd_users_pk PRIMARY KEY (pmd_user_id)
 );
 
 CREATE INDEX idx_users_username ON pmd_users(username);
 CREATE INDEX idx_users_email ON pmd_users(email);
 CREATE INDEX idx_users_active ON pmd_users(is_active);
+CREATE INDEX idx_users_preferences ON pmd_users USING GIN (preferences);
 
 COMMENT ON TABLE pmd_users IS 'User accounts for authentication and authorization';
 COMMENT ON COLUMN pmd_users.password_hash IS 'Bcrypt hashed password (10 rounds)';
 COMMENT ON COLUMN pmd_users.failed_login_attempts IS 'Counter for account lockout mechanism';
 COMMENT ON COLUMN pmd_users.locked_until IS 'Timestamp when account lockout expires';
+COMMENT ON COLUMN pmd_users.preferences IS 'User preferences stored as JSON: theme, font_size, high_contrast, default_menu_state, default_home_page, language';
 
 -- ============================================================================
 -- ROLES TABLE

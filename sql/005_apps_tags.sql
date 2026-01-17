@@ -143,9 +143,9 @@ CREATE INDEX IF NOT EXISTS idx_schedule_tags_tag ON pmd_schedule_tags(pmd_tag_id
 -- SEED DATA
 -- ============================================================================
 
--- Default "Unassigned" app for artifacts without an app
+-- Default app for artifacts without a specific app assignment
 INSERT INTO pmd_apps (app_name, app_description, app_color, app_icon, is_active)
-VALUES ('Unassigned', 'Default app for uncategorized artifacts', '#6c757d', 'Inbox', true)
+VALUES ('Default', 'Default app for general artifacts', '#6c757d', 'Inbox', true)
 ON CONFLICT (app_name) DO NOTHING;
 
 -- Default tags for common use cases

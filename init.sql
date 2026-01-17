@@ -36,6 +36,9 @@
 \echo 'Installing SSO (Single Sign-On)...'
 \i sql/008_sso.sql
 
+\echo 'Installing system settings...'
+\i sql/009_system_settings.sql
+
 \echo 'Installing EDI X12 healthcare tables...'
 \i sql/010_edi_x12.sql
 
@@ -50,6 +53,6 @@
 \echo '=============================================='
 \echo ''
 \echo 'Installed modules:'
-\echo '  - Core: Extensions, Reference Data, Auth, ETL, Automation, Apps/Tags, API Builder, Notifications, SSO'
+\echo '  - Core: Extensions, Reference Data, Auth, ETL, Automation, Apps/Tags, API Builder, Notifications, SSO, System Settings'
 \echo '  - Healthcare: EDI X12, HL7 v2.x, FHIR R4'
 \echo ''
