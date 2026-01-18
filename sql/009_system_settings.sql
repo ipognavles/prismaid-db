@@ -115,6 +115,17 @@ INSERT INTO pmd_system_settings (setting_key, default_value, setting_category, d
 ('NOTIFICATION_POLLING_INTERVAL', '300000', 'notifications', 'number', 'Polling Interval (ms)', 'How often clients check for new notifications (0 = disabled, default 5 minutes)', true, 0, 1800000, 3);
 
 -- ============================================================================
+-- SEED DATA - Branding Settings
+-- ============================================================================
+
+INSERT INTO pmd_system_settings (setting_key, default_value, setting_category, data_type, display_name, description, is_editable, display_order) VALUES
+('BRAND_PRIMARY_COLOR', '#667eea', 'branding', 'string', 'Primary Color', 'Main brand color used throughout the application (hex format, e.g., #667eea)', true, 1),
+('BRAND_COMPANY_NAME', 'Prismaid', 'branding', 'string', 'Company Name', 'Organization name displayed in the application header (max 50 characters)', true, 2),
+('BRAND_TAGLINE', 'Complex Data, Visual Clarity', 'branding', 'string', 'Tagline', 'Slogan displayed below the company name in the header (max 100 characters)', true, 3),
+('BRAND_LOGO_PATH', '', 'branding', 'string', 'Logo Path', 'Path to custom logo file. Leave empty to use the default Prismaid logo.', true, 4),
+('BRAND_FAVICON_PATH', '', 'branding', 'string', 'Favicon Path', 'Path to custom favicon file. Leave empty to use the default favicon.', true, 5);
+
+-- ============================================================================
 -- CATEGORY METADATA VIEW (Optional helper view)
 -- ============================================================================
 
@@ -128,6 +139,7 @@ SELECT DISTINCT
         WHEN 'engine' THEN 'Engine'
         WHEN 'system_info' THEN 'System Information'
         WHEN 'notifications' THEN 'Notifications'
+        WHEN 'branding' THEN 'Branding'
         ELSE INITCAP(REPLACE(setting_category, '_', ' '))
     END AS category_display_name,
     CASE setting_category
@@ -136,6 +148,7 @@ SELECT DISTINCT
         WHEN 'database' THEN 3
         WHEN 'engine' THEN 4
         WHEN 'notifications' THEN 5
+        WHEN 'branding' THEN 6
         WHEN 'system_info' THEN 99
         ELSE 50
     END AS category_order,
@@ -146,6 +159,7 @@ SELECT DISTINCT
         WHEN 'engine' THEN 'cpu'
         WHEN 'system_info' THEN 'info'
         WHEN 'notifications' THEN 'bell'
+        WHEN 'branding' THEN 'palette'
         ELSE 'settings'
     END AS category_icon
 FROM pmd_system_settings

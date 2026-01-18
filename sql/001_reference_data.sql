@@ -112,4 +112,5 @@ VALUES
     (4, 'FILE_STORAGE', 'File Storage', 'File Storage'),
     (4, 'MSG_QUEUE', 'Message Queue', 'Message Queue'),
     (4, 'EVENT_STREAM', 'Event Stream', 'Event Stream'),
-    (4, 'AI_SERVICES', 'AI Services', 'AI Services');
+    (4, 'AI_SERVICES', 'AI Services', 'AI Services'),
+    (4, 'EMAIL', 'Email', 'Email Server Connections');

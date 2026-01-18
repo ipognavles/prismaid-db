@@ -48,11 +48,14 @@
 \echo 'Installing FHIR R4 healthcare tables...'
 \i sql/012_fhir_r4.sql
 
+\echo 'Installing version history...'
+\i sql/013_version_history.sql
+
 \echo '=============================================='
 \echo 'Prismaid Database Schema installed successfully!'
 \echo '=============================================='
 \echo ''
 \echo 'Installed modules:'
-\echo '  - Core: Extensions, Reference Data, Auth, ETL, Automation, Apps/Tags, API Builder, Notifications, SSO, System Settings'
+\echo '  - Core: Extensions, Reference Data, Auth, ETL, Automation, Apps/Tags, API Builder, Notifications, SSO, System Settings, Version History'
 \echo '  - Healthcare: EDI X12, HL7 v2.x, FHIR R4'
 \echo ''

@@ -221,3 +221,43 @@ CREATE TABLE IF NOT EXISTS pmd_data_flow_runs (
 CREATE INDEX IF NOT EXISTS idx_pmd_data_flow_runs_flow ON pmd_data_flow_runs(pmd_data_flow_id);
 CREATE INDEX IF NOT EXISTS idx_pmd_data_flow_runs_status ON pmd_data_flow_runs(run_status);
 CREATE INDEX IF NOT EXISTS idx_pmd_data_flow_runs_started ON pmd_data_flow_runs(started_at);
+
+
+-- ============================================================================
+-- MIGRATION IMPORTS (Import History & Rollback Tracking)
+-- ============================================================================
+
+CREATE SEQUENCE IF NOT EXISTS pmd_migration_imports_seq
+    INCREMENT BY 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    START 1
+    CACHE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS pmd_migration_imports (
+    pmd_migration_import_id BIGINT DEFAULT nextval('pmd_migration_imports_seq'::regclass) NOT NULL,
+    import_notes TEXT,
+    source_system VARCHAR(255),
+    source_filename VARCHAR(255),
+    export_version VARCHAR(20),
+    exported_at TIMESTAMP WITH TIME ZONE,
+    exported_by VARCHAR(100),
+    artifacts_summary JSONB,
+    artifacts_detail JSONB,
+    conflict_resolutions JSONB,
+    import_status VARCHAR(20) DEFAULT 'success',
+    error_details JSONB,
+    is_rolled_back BOOLEAN DEFAULT false,
+    rolled_back_at TIMESTAMP WITH TIME ZONE,
+    rolled_back_by BIGINT,
+    rolled_back_by_name VARCHAR(100),
+    created_by BIGINT DEFAULT 1 NOT NULL,
+    created_by_name VARCHAR(100) DEFAULT 'system' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT pmd_migration_imports_pk PRIMARY KEY (pmd_migration_import_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pmd_migration_imports_created ON pmd_migration_imports(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pmd_migration_imports_status ON pmd_migration_imports(import_status);
+CREATE INDEX IF NOT EXISTS idx_pmd_migration_imports_rolled_back ON pmd_migration_imports(is_rolled_back);

@@ -39,12 +39,15 @@
 \echo 'Installing system settings...'
 \i sql/009_system_settings.sql
 
+\echo 'Installing version history...'
+\i sql/013_version_history.sql
+
 \echo '=============================================='
 \echo 'Prismaid Database Schema (Core) installed successfully!'
 \echo '=============================================='
 \echo ''
 \echo 'Installed modules:'
-\echo '  - Core: Extensions, Reference Data, Auth, ETL, Automation, Apps/Tags, API Builder, Notifications, SSO, System Settings'
+\echo '  - Core: Extensions, Reference Data, Auth, ETL, Automation, Apps/Tags, API Builder, Notifications, SSO, System Settings, Version History'
 \echo ''
 \echo 'Healthcare modules NOT installed. To add later, run:'
 \echo '  psql -U postgres -d prismaid -f prismaid-db/sql/010_edi_x12.sql'
